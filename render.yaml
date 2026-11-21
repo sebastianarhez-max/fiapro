@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: fiapro
+    runtime: docker
+    plan: free
+    region: virginia
+    healthCheckPath: /up
+    envVars:
+      - key: APP_NAME
+        value: FiaPro
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        generateValue: true
+      - key: APP_LOCALE
+        value: es
+      - key: APP_FALLBACK_LOCALE
+        value: en
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_URL
+        fromDatabase:
+          name: fiapro-db
+          property: connectionString
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: sync
+
+databases:
+  - name: fiapro-db
+    plan: free
+    region: virginia
+    databaseName: fiapro
+    user: fiapro
