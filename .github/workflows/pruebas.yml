@@ -1,0 +1,48 @@
+name: Pruebas
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: fiapro_ci
+          MYSQL_DATABASE: fiapro_nuevo
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      MYSQL_PWD: fiapro_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, intl, zip, bcmath, gd
+      - name: Instalar dependencias
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Preparar entorno
+        run: cp .env.example .env && php artisan key:generate
+      - name: php artisan test
+        run: php artisan test --filter=CalculosFinancieros
+      - name: Migrar la base fiapro_nuevo en MySQL
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: fiapro_nuevo
+          DB_USERNAME: root
+          DB_PASSWORD: fiapro_ci
+        run: php artisan migrate --force
+      - name: SHOW TABLES
+        run: |
+          mysql -h 127.0.0.1 -uroot -t -e "SELECT VERSION() AS version_mysql;"
+          mysql -h 127.0.0.1 -uroot -t -e "SHOW TABLES;" fiapro_nuevo
