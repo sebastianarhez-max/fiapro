@@ -18,6 +18,9 @@ pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
 
+// Las pruebas HTTP del simulador necesitan Laravel, sin migraciones ni RefreshDatabase.
+pest()->extend(TestCase::class)->in('Unit/CalculosFinancierosTest.php');
+
 /*
 |--------------------------------------------------------------------------
 | Expectations

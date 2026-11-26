@@ -45,11 +45,13 @@
     </div>
 
     @if($resultado)
-        @php($r = $resultado['resumen'])
+        @php
+            $r = $resultado['resumen'];
+        @endphp
         <section class="stats" style="margin-top:18px">
-            <div class="stat"><div class="ico">@include('partials.icono', ['n' => 'cart'])</div><p>Capital</p><strong>S/ {{ number_format($r['capital'], 2) }}</strong><small>TEA {{ number_format($r['tea'] * 100, 7) }}%</small></div>
+            <div class="stat"><div class="ico">@include('partials.icono', ['n' => 'cart'])</div><p>Capital</p><strong>S/ {{ number_format($r['capital'], 2) }}</strong><small>TEA {{ number_format($r['tea'] * 100, \App\Services\CronogramaFrances::PRECISION_SIMULADOR) }}%</small></div>
             <div class="stat"><div class="ico navy">@include('partials.icono', ['n' => 'clock'])</div><p>Período de gracia</p><strong>{{ $r['periodos_gracia'] ? $r['periodos_gracia'] . ' ' . ($r['periodos_gracia'] === 1 ? 'quincena' : 'quincenas') : 'Sin gracia' }}</strong><small>{{ $r['periodos_gracia'] ? 'interés capitalizado S/ ' . number_format($r['interes_gracia'], 2) . ' · saldo ' . number_format($r['capital_financiado'], 2) : 'paga desde la primera quincena' }}</small></div>
-            <div class="stat"><div class="ico">@include('partials.icono', ['n' => 'chart'])</div><p>Cuota quincenal ({{ $r['n_cuotas'] }} de {{ $r['n_periodos'] }} períodos)</p><strong>S/ {{ number_format($r['cuota'], 2) }}</strong><small>TEQ {{ number_format($r['teq'] * 100, 7) }}% · 1.ª cuota {{ $r['fecha_primer_pago']->format('d/m/Y') }}</small></div>
+            <div class="stat"><div class="ico">@include('partials.icono', ['n' => 'chart'])</div><p>Cuota quincenal ({{ $r['n_cuotas'] }} de {{ $r['n_periodos'] }} períodos)</p><strong>S/ {{ number_format($r['cuota'], 2) }}</strong><small>TEQ {{ number_format($r['teq'] * 100, \App\Services\CronogramaFrances::PRECISION_SIMULADOR) }}% · 1.ª cuota {{ $r['fecha_primer_pago']->format('d/m/Y') }}</small></div>
             <div class="stat"><div class="ico navy">@include('partials.icono', ['n' => 'coins'])</div><p>Total a pagar</p><strong>S/ {{ number_format($r['total_a_pagar'], 2) }}</strong><small>intereses S/ {{ number_format($r['total_intereses'], 2) }}</small></div>
         </section>
 
@@ -65,8 +67,8 @@
                         <tr class="{{ $f['gracia'] === 'T' ? 'gracia' : '' }}">
                             <td>{{ $f['n'] }}</td>
                             <td class="num">{{ $f['fecha']->format('d/m/Y') }}</td>
-                            <td class="right num">{{ number_format($r['tea'] * 100, 2) }}%</td>
-                            <td class="right num">{{ number_format($r['teq'] * 100, 7) }}%</td>
+                            <td class="right num">{{ number_format($r['tea'] * 100, \App\Services\CronogramaFrances::PRECISION_SIMULADOR) }}%</td>
+                            <td class="right num">{{ number_format($r['teq'] * 100, \App\Services\CronogramaFrances::PRECISION_SIMULADOR) }}%</td>
                             <td><span class="chip">{{ $f['gracia'] }}</span></td>
                             <td class="right num">{{ number_format($f['saldo_inicial'], 2) }}</td>
                             <td class="right num">{{ number_format($f['interes'], 2) }}</td>
@@ -87,6 +89,15 @@
                     </tfoot>
                 </table>
             </div>
+            @php
+                $sumaCuotasMostradas = array_sum(array_map(
+                    fn ($fila) => (int) round($fila['cuota'] * 100), $resultado['filas']
+                ));
+                $totalMostrado = (int) round($r['total_a_pagar'] * 100);
+            @endphp
+            @if($sumaCuotasMostradas !== $totalMostrado)
+                <p class="muted small">Los cálculos usan siete decimales internos. La suma de las cuotas mostradas (S/ {{ number_format($sumaCuotasMostradas / 100, 2) }}) puede diferir del total por el redondeo de cada importe a dos decimales.</p>
+            @endif
         </div>
     @endif
 @endsection

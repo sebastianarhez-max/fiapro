@@ -17,6 +17,9 @@ use InvalidArgumentException;
  */
 class CronogramaFrances
 {
+    public const PRECISION_MONETARIA = 2;
+    public const PRECISION_SIMULADOR = 7;
+
     public const BASE_ANUAL = 360;
     public const DIAS_QUINCENA = 15;
     public const GRACIA_MAX = 3;
@@ -27,9 +30,13 @@ class CronogramaFrances
      * @param int             $meses   Plazo en meses (períodos = meses * 2)
      * @param CarbonInterface $compra  Fecha de la compra (inicio del período 1)
      * @param int             $gracia  Quincenas de gracia total elegidas por el cliente (0 a 3)
+     * @param int             $precision Decimales internos; por defecto conserva la liquidación de compras reales.
      */
-    public function generar(float $capital, float $tea, int $meses, CarbonInterface $compra, int $gracia = 0): array
+    public function generar(float $capital, float $tea, int $meses, CarbonInterface $compra, int $gracia = 0, int $precision = self::PRECISION_MONETARIA): array
     {
+        if ($precision < self::PRECISION_MONETARIA || $precision > self::PRECISION_SIMULADOR) {
+            throw new InvalidArgumentException('La precisión debe estar entre 2 y 7 decimales.');
+        }
         if ($capital <= 0) {
             throw new InvalidArgumentException('El capital debe ser mayor a 0.');
         }
@@ -53,16 +60,16 @@ class CronogramaFrances
             throw new InvalidArgumentException("Con {$meses} " . ($meses === 1 ? 'mes' : 'meses') . " ({$total} quincenas) la gracia puede ser como máximo de " . ($total - 1) . ' ' . ($total - 1 === 1 ? 'quincena' : 'quincenas') . '. Debe quedar al menos una cuota.');
         }
 
-        $teq = self::teq($tea);
+        $teq = self::teq($tea, $precision === self::PRECISION_MONETARIA ? null : $precision);
         $n = $total - $gracia;                                // cuotas con pago
         $filas = [];
-        $saldo = round($capital, 2);
+        $saldo = round($capital, $precision);
         $interesGracia = 0.0;
 
         // 1) Quincenas de gracia total: no paga, el interés se suma al saldo
         for ($k = 1; $k <= $gracia; $k++) {
-            $interes = round($saldo * $teq, 2);
-            $final = round($saldo + $interes, 2);
+            $interes = round($saldo * $teq, $precision);
+            $final = round($saldo + $interes, $precision);
             $filas[] = [
                 'n' => $k,
                 'fecha' => $this->fechaPeriodo($compra, $k),
@@ -73,31 +80,35 @@ class CronogramaFrances
                 'amortizacion' => 0.0,
                 'saldo_final' => $final,
             ];
-            $interesGracia += $interes;
+            $interesGracia = round($interesGracia + $interes, $precision);
             $saldo = $final;
         }
         $saldoCuotas = $saldo;                                // saldo con el que se calcula la cuota
 
         // 2) Cuota fija (método francés) sobre el saldo después de la gracia y las cuotas que faltan
         if ($teq == 0.0) {
-            $cuota = round($saldoCuotas / $n, 2);
+            $cuota = round($saldoCuotas / $n, $precision);
+        } elseif ($precision > self::PRECISION_MONETARIA) {
+            // Forma equivalente de la fórmula francesa, estable cerca de tasa cero.
+            $cuota = round($saldoCuotas * $teq / -expm1(-$n * log1p($teq)), $precision);
         } else {
             $f = pow(1 + $teq, $n);
-            $cuota = round($saldoCuotas * $teq * $f / ($f - 1), 2);
+            $cuota = round($saldoCuotas * $teq * $f / ($f - 1), $precision);
         }
 
         // 3) Quincenas con cuota
         $totalIntereses = $interesGracia;
         $totalCuotas = 0.0;
         for ($k = $gracia + 1; $k <= $total; $k++) {
-            $interes = round($saldo * $teq, 2);
+            $interes = round($saldo * $teq, $precision);
             if ($k < $total) {
-                $amort = round($cuota - $interes, 2);
+                $amort = round($cuota - $interes, $precision);
             } else {                                          // última cuota: salda exacto (absorbe el redondeo)
+                // Con siete decimales solo absorbe el residuo acumulado de esa precisión.
                 $amort = $saldo;
             }
-            $cuotaK = round($amort + $interes, 2);
-            $final = round($saldo - $amort, 2);
+            $cuotaK = round($amort + $interes, $precision);
+            $final = round($saldo - $amort, $precision);
 
             $filas[] = [
                 'n' => $k,
@@ -109,33 +120,37 @@ class CronogramaFrances
                 'amortizacion' => $amort,
                 'saldo_final' => $final,
             ];
-            $totalIntereses += $interes;
-            $totalCuotas += $cuotaK;
+            $totalIntereses = round($totalIntereses + $interes, $precision);
+            $totalCuotas = round($totalCuotas + $cuotaK, $precision);
             $saldo = $final;
         }
 
         return [
             'resumen' => [
-                'capital' => round($capital, 2),
+                'capital' => round($capital, $precision),
                 'tea' => $tea,
                 'teq' => $teq,
                 'n_periodos' => $total,
                 'periodos_gracia' => $gracia,
                 'n_cuotas' => $n,
-                'interes_gracia' => round($interesGracia, 2),
+                'interes_gracia' => round($interesGracia, $precision),
                 'capital_financiado' => $saldoCuotas,
                 'cuota' => $cuota,
                 'fecha_primer_pago' => $this->fechaPeriodo($compra, $gracia + 1),
-                'total_intereses' => round($totalIntereses, 2),
-                'total_a_pagar' => round($totalCuotas, 2),
+                'total_intereses' => round($totalIntereses, $precision),
+                'total_a_pagar' => round($totalCuotas, $precision),
             ],
             'filas' => $filas,
         ];
     }
 
     /** TEQ = (1 + TEA)^(15/360) − 1 */
-    public static function teq(float $tea): float
+    public static function teq(float $tea, ?int $precision = null): float
     {
+        if ($precision !== null) {
+            return round(expm1(log1p($tea) * self::DIAS_QUINCENA / self::BASE_ANUAL), $precision);
+        }
+
         return pow(1 + $tea, self::DIAS_QUINCENA / self::BASE_ANUAL) - 1;
     }
 

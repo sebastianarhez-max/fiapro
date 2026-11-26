@@ -29,7 +29,7 @@ class CronogramaController extends Controller
     {
         $datos = $request->validate([
             'capital' => 'required|numeric|gt:0|max:' . config('fiapro.limite_max'),
-            'tea' => 'required|numeric|gt:0|max:' . config('fiapro.tea_max_ordinaria'),
+            'tea' => 'required|numeric|min:0|max:' . config('fiapro.tea_max_ordinaria'),
             'meses' => 'required|integer|between:1,' . config('fiapro.meses_max'),
             'gracia' => 'required|integer|between:0,' . CronogramaFrances::GRACIA_MAX,
             'fecha_hora_compra' => 'required|date',
@@ -44,7 +44,8 @@ class CronogramaController extends Controller
                 (float) $datos['tea'] / 100,
                 (int) $datos['meses'],
                 Carbon::parse($datos['fecha_hora_compra']),
-                (int) $datos['gracia']
+                (int) $datos['gracia'],
+                CronogramaFrances::PRECISION_SIMULADOR
             );
         } catch (InvalidArgumentException $e) {
             return back()->withInput()->withErrors(['gracia' => $e->getMessage()]);
