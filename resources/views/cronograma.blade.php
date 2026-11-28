@@ -89,15 +89,6 @@
                     </tfoot>
                 </table>
             </div>
-            @php
-                $sumaCuotasMostradas = array_sum(array_map(
-                    fn ($fila) => (int) round($fila['cuota'] * 100), $resultado['filas']
-                ));
-                $totalMostrado = (int) round($r['total_a_pagar'] * 100);
-            @endphp
-            @if($sumaCuotasMostradas !== $totalMostrado)
-                <p class="muted small">Los cálculos usan siete decimales internos. La suma de las cuotas mostradas (S/ {{ number_format($sumaCuotasMostradas / 100, 2) }}) puede diferir del total por el redondeo de cada importe a dos decimales.</p>
-            @endif
         </div>
     @endif
 @endsection

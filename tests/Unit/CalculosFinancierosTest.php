@@ -59,11 +59,17 @@ test('Juego 2 con 1 quincena de gracia total elegida por el cliente', function (
 
     expect($r['resumen']['n_cuotas'])->toBe(5);
     expect($r['resumen']['cuota'])->toBe(93.28);
-    expect($r['resumen']['total_intereses'])->toBe(16.38);
+    expect($r['resumen']['total_intereses'])->toBe(16.40);
+    expect($r['resumen']['total_a_pagar'])->toBe(466.40);
     expect($r['resumen']['fecha_primer_pago']->format('d/m/Y'))->toBe('15/10/2026');
+
+    // Todas las cuotas son iguales; el redondeo lo absorbe el interés de la última
+    $cuotas = array_column(array_slice($r['filas'], 1), 'cuota');
+    expect($cuotas)->toBe([93.28, 93.28, 93.28, 93.28, 93.28]);
     $ultima = end($r['filas']);
     expect($ultima['n'])->toBe(6);
-    expect($ultima['cuota'])->toBe(93.26);
+    expect($ultima['amortizacion'])->toBe(92.43);
+    expect($ultima['interes'])->toBe(0.85);
     expect($ultima['saldo_final'])->toBe(0.0);
 });
 
@@ -89,8 +95,8 @@ test('Simulador: caso principal con siete decimales y dos quincenas de gracia', 
     expect($resumen['teq'])->toEqualWithDelta(0.0090033, 1e-12);
     expect($resumen['capital_financiado'])->toEqualWithDelta(458.1394467, 1e-7);
     expect($resumen['cuota'])->toEqualWithDelta(117.1243939, 1e-7);
-    expect($resumen['total_intereses'])->toEqualWithDelta(18.4975757, 1e-7);
-    expect($resumen['total_a_pagar'])->toEqualWithDelta(468.4975757, 1e-7);
+    expect($resumen['total_intereses'])->toEqualWithDelta(18.4975756, 1e-7);
+    expect($resumen['total_a_pagar'])->toEqualWithDelta(468.4975756, 1e-7);
     expect(end($r['filas'])['saldo_final'])->toBe(0.0);
 
     $pagos = array_slice($r['filas'], 2);
@@ -141,10 +147,10 @@ test('Simulador: gracia, fechas, amortizaciones y totales mantienen sus identida
     expect(array_sum(array_column($r['filas'], 'cuota')))->toEqualWithDelta($total, 1e-7);
     expect($total - $resumen['capital'])->toEqualWithDelta($resumen['total_intereses'], 1e-7);
 })->with([
-    'sin gracia' => [0, 450.0, 77.3810178, 464.2861066],
+    'sin gracia' => [0, 450.0, 77.3810178, 464.2861068],
     'una quincena' => [1, 454.0514850, 93.2777297, 466.3886485],
-    'dos quincenas' => [2, 458.1394467, 117.1243939, 468.4975757],
-    'tres quincenas' => [3, 462.2642136, 156.8709629, 470.6128888],
+    'dos quincenas' => [2, 458.1394467, 117.1243939, 468.4975756],
+    'tres quincenas' => [3, 462.2642136, 156.8709629, 470.6128887],
 ]);
 
 test('Simulador: tasas cero o muy pequeñas liquidan sin división por cero', function ($tea, $gracia) {
@@ -186,19 +192,20 @@ test('Simulador: una única cuota efectiva liquida todo el saldo capitalizado', 
     [1, 1, 0.0],
 ]);
 
-test('Regresión: las compras reales conservan sus cuotas y la TEQ sin redondear', function () {
+test('Compras reales: cuotas iguales, montos a 2 decimales y TEQ sin redondear', function () {
     $r = (new CronogramaFrances())->generar(450.00, 0.24, 3, Carbon::parse('2026-09-15'), 2);
     expect($r['resumen']['teq'])->toBe(pow(1.24, 15 / 360) - 1);
     expect($r['resumen']['capital_financiado'])->toBe(458.14);
     expect($r['resumen']['cuota'])->toBe(117.12);
-    expect($r['resumen']['total_intereses'])->toBe(18.50);
-    expect($r['resumen']['total_a_pagar'])->toBe(468.50);
-    expect(array_column($r['filas'], 'cuota'))->toBe([0.0, 0.0, 117.12, 117.12, 117.12, 117.14]);
+    expect($r['resumen']['total_intereses'])->toBe(18.48);
+    expect($r['resumen']['total_a_pagar'])->toBe(468.48);
+    expect(array_column($r['filas'], 'cuota'))->toBe([0.0, 0.0, 117.12, 117.12, 117.12, 117.12]);
+    expect(end($r['filas'])['interes'])->toBe(1.03);
     expect(end($r['filas'])['saldo_final'])->toBe(0.0);
 });
 
 
-test('Simulador HTTP: usa siete decimales y explica el redondeo solo cuando corresponde', function ($tea, $gracia, $mostrarNota) {
+test('Simulador HTTP: usa el mismo cálculo que las compras (cuotas iguales, montos a 2 decimales)', function ($tea, $gracia, $totalEsperado) {
     // Usuario solo en memoria: esta prueba no guarda registros ni usa RefreshDatabase.
     $usuario = (new \App\Models\User())->forceFill([
         'id' => 1,
@@ -217,18 +224,13 @@ test('Simulador HTTP: usa siete decimales y explica el redondeo solo cuando corr
     ]);
 
     $respuesta->assertOk()->assertViewHas('resultado', function ($resultado) use ($tea, $gracia) {
-        $esperado = (new CronogramaFrances())->generar(450, $tea / 100, 3, Carbon::parse('2026-09-15T10:00'), $gracia, CronogramaFrances::PRECISION_SIMULADOR);
+        $esperado = (new CronogramaFrances())->generar(450, $tea / 100, 3, Carbon::parse('2026-09-15T10:00'), $gracia);
 
         return $resultado == $esperado;
     });
-    if ($mostrarNota) {
-        $respuesta->assertSee('Los cálculos usan siete decimales internos.')
-            ->assertSee('468.48')->assertSee('468.50');
-    } else {
-        $respuesta->assertDontSee('Los cálculos usan siete decimales internos.');
-    }
+    $respuesta->assertSee($totalEsperado);
 })->with([
-    'caso principal con diferencia visible' => [24.0, 2, true],
-    'tasa cero sin diferencia visible' => [0.0, 0, false],
-    'tasa muy pequeña aceptada por el formulario' => [0.0000001, 2, false],
+    'caso principal con dos quincenas de gracia' => [24.0, 2, '468.48'],
+    'tasa cero' => [0.0, 0, '450.00'],
+    'tasa muy pequeña aceptada por el formulario' => [0.0000001, 2, '450.00'],
 ])->uses(\Tests\TestCase::class);

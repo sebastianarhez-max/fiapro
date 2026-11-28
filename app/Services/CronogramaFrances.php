@@ -14,6 +14,8 @@ use InvalidArgumentException;
  * - Los períodos se numeran desde 1 (no hay período 0).
  * - El cliente puede pedir de 0 a 3 quincenas de gracia total (T) dentro del plazo:
  *   no paga y el interés se suma al saldo. Luego vienen N − g cuotas (S), N = meses × 2.
+ * - Todas las cuotas son iguales. Los montos se redondean a 2 decimales y la diferencia
+ *   de redondeo se absorbe en el interés de la última cuota, que deja el saldo en 0.00.
  */
 class CronogramaFrances
 {
@@ -95,17 +97,33 @@ class CronogramaFrances
             $f = pow(1 + $teq, $n);
             $cuota = round($saldoCuotas * $teq * $f / ($f - 1), $precision);
         }
+        if ($teq > 0.0) {
+            // Con tasas muy bajas, el redondeo de la cuota podría dejar negativo el interés
+            // de la última cuota (que absorbe la diferencia). En ese caso se sube la cuota
+            // la mínima unidad (un céntimo) hasta que el último interés sea mayor o igual a cero.
+            $unidad = 10 ** -$precision;
+            while ($cuota - $this->saldoAntesDeUltimaCuota($saldoCuotas, $teq, $cuota, $n, $precision) < 0) {
+                $cuota = round($cuota + $unidad, $precision);
+            }
+        }
 
         // 3) Quincenas con cuota
         $totalIntereses = $interesGracia;
         $totalCuotas = 0.0;
         for ($k = $gracia + 1; $k <= $total; $k++) {
-            $interes = round($saldo * $teq, $precision);
             if ($k < $total) {
+                $interes = round($saldo * $teq, $precision);
                 $amort = round($cuota - $interes, $precision);
-            } else {                                          // última cuota: salda exacto (absorbe el redondeo)
-                // Con siete decimales solo absorbe el residuo acumulado de esa precisión.
+            } elseif ($teq > 0.0) {
+                // Última cuota: todas las cuotas son iguales (indicación del docente).
+                // Se amortiza todo el saldo pendiente y el interés de este período absorbe
+                // la diferencia de redondeo acumulada (algunos céntimos).
                 $amort = $saldo;
+                $interes = round($cuota - $saldo, $precision);
+            } else {
+                // Tasa cero (solo en el simulador): sin interés, la última cuota salda el saldo.
+                $amort = $saldo;
+                $interes = 0.0;
             }
             $cuotaK = round($amort + $interes, $precision);
             $final = round($saldo - $amort, $precision);
@@ -142,6 +160,17 @@ class CronogramaFrances
             ],
             'filas' => $filas,
         ];
+    }
+
+    /** Saldo que queda antes de la última cuota si se paga la cuota indicada en las anteriores. */
+    private function saldoAntesDeUltimaCuota(float $saldo, float $teq, float $cuota, int $n, int $precision): float
+    {
+        for ($k = 1; $k < $n; $k++) {
+            $interes = round($saldo * $teq, $precision);
+            $saldo = round($saldo - round($cuota - $interes, $precision), $precision);
+        }
+
+        return $saldo;
     }
 
     /** TEQ = (1 + TEA)^(15/360) − 1 */

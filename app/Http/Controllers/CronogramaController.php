@@ -44,8 +44,7 @@ class CronogramaController extends Controller
                 (float) $datos['tea'] / 100,
                 (int) $datos['meses'],
                 Carbon::parse($datos['fecha_hora_compra']),
-                (int) $datos['gracia'],
-                CronogramaFrances::PRECISION_SIMULADOR
+                (int) $datos['gracia']
             );
         } catch (InvalidArgumentException $e) {
             return back()->withInput()->withErrors(['gracia' => $e->getMessage()]);
