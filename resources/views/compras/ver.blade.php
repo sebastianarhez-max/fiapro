@@ -155,9 +155,9 @@
             @else
                 @if(! $esAntigua)
                     Cada período es una quincena (15 días comerciales, base 30/360) contada desde la fecha de compra, con la misma TEQ.
-                    T = quincena de gracia total (no se paga; el interés se suma al saldo). S = período con cuota. La última cuota se ajusta para saldar exactamente el saldo.
+                    T = quincena de gracia total (no se paga; el interés se suma al saldo). S = período con cuota. Todas las cuotas son iguales: los céntimos de redondeo los absorbe el interés de la última cuota, que deja el saldo en 0.00.
                 @else
-                    T = período de gracia total (el interés se capitaliza y no se paga). S = período con cuota. La última cuota se ajusta para saldar exactamente el capital.
+                    T = período de gracia total (el interés se capitaliza y no se paga). S = período con cuota. Todas las cuotas son iguales: los céntimos de redondeo los absorbe el interés de la última cuota, que deja el saldo en 0.00.
                 @endif
             @endif
         </p>
