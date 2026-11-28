@@ -113,7 +113,7 @@
                         <td class="right num">{{ number_format($o->interes_compensatorio, 2) }}</td>
                         <td class="right num">{{ number_format($o->monto_total, 2) }}</td>
                         <td class="right num">{{ number_format($o->capital, 2) }}</td>
-                        @php($saldo = round($saldo - $o->capital, 2))
+                        @php($saldo = round($saldo - $o->capital, 7))
                         <td class="right num">{{ number_format($esUnico ? 0 : $saldo, 2) }}</td>
                         <td class="right num">{{ $o->estado === 'pagado' ? number_format($o->interes_moratorio, 2) : '—' }}</td>
                         <td>
@@ -155,9 +155,9 @@
             @else
                 @if(! $esAntigua)
                     Cada período es una quincena (15 días comerciales, base 30/360) contada desde la fecha de compra, con la misma TEQ.
-                    T = quincena de gracia total (no se paga; el interés se suma al saldo). S = período con cuota. Todas las cuotas son iguales: los céntimos de redondeo los absorbe el interés de la última cuota, que deja el saldo en 0.00.
+                    T = quincena de gracia total (no se paga; el interés se suma al saldo). S = período con cuota. Los cálculos se hacen con 7 decimales y se muestran redondeados a 2, por eso todas las cuotas son iguales; en algunas filas la suma de los montos mostrados puede diferir en un céntimo.
                 @else
-                    T = período de gracia total (el interés se capitaliza y no se paga). S = período con cuota. Todas las cuotas son iguales: los céntimos de redondeo los absorbe el interés de la última cuota, que deja el saldo en 0.00.
+                    T = período de gracia total (el interés se capitaliza y no se paga). S = período con cuota. Los cálculos se hacen con 7 decimales y se muestran redondeados a 2.
                 @endif
             @endif
         </p>

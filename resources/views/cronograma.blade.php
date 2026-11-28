@@ -89,6 +89,7 @@
                     </tfoot>
                 </table>
             </div>
+            <p class="muted small" style="margin:14px 0 0">Los cálculos se hacen con 7 decimales y se muestran redondeados a 2 decimales; por eso, en algunas filas o totales, la suma de los montos mostrados puede diferir en un céntimo.</p>
         </div>
     @endif
 @endsection

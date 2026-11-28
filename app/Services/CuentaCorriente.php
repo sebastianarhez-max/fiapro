@@ -267,8 +267,8 @@ class CuentaCorriente
                 'fecha_real_pago' => $fechaPago->toDateString(),
                 'monto_pagado' => $e['total'],
                 'monto_interes_mora' => $e['mora'],
-                'monto_interes_comp' => $e['interes'],
-                'monto_capital' => $e['capital'],
+                'monto_interes_comp' => round($e['interes'], 2),   // la obligación guarda 7 decimales; el pago, céntimos
+                'monto_capital' => round($e['capital'], 2),
                 'moneda' => $compra->moneda ?? 'PEN',
                 'medio_pago' => $medio,
                 'referencia' => $referencia,
@@ -288,6 +288,54 @@ class CuentaCorriente
         });
 
         return $pagoId;
+    }
+
+    /**
+     * Recalcula con el cronograma vigente (7 decimales) las cuotas PENDIENTES de las compras en cuotas.
+     * Las cuotas pagadas no se tocan. Se usa al actualizar la base y al cargar los datos de demostración.
+     */
+    public function recalcularCuotasPendientes(): int
+    {
+        $cambios = 0;
+        $compras = DB::table('compra')->where('modalidad_pago', 'CUOTAS')->get();
+        foreach ($compras as $compra) {
+            $r = $this->cronograma->generar(
+                (float) $compra->monto,
+                (float) $compra->tea_aplicada / 100,
+                (int) $compra->numero_meses,
+                Carbon::parse($compra->fecha_compra),
+                (int) ($compra->periodos_gracia ?? 0)
+            );
+            $filas = [];
+            foreach ($r['filas'] as $f) {
+                $filas[$f['n']] = $f;
+            }
+            $pendientes = DB::table('obligacion')
+                ->where('compra_id', $compra->compra_id)
+                ->where('estado', 'pendiente')
+                ->get();
+            foreach ($pendientes as $o) {
+                $f = $filas[(int) $o->numero_cuota] ?? null;
+                if (! $f) {
+                    continue;
+                }
+                DB::table('obligacion')->where('obligacion_id', $o->obligacion_id)->update([
+                    'capital' => $f['amortizacion'],
+                    'interes_compensatorio' => $f['interes'],
+                    'monto_total' => $f['cuota'],
+                    'saldo' => $f['cuota'],
+                ]);
+                $cambios++;
+            }
+            $datos = ['cuota' => $r['resumen']['cuota']];
+            if ($compra->periodos_gracia !== null) {          // compras con el esquema quincenal vigente
+                $datos['interes_gracia'] = $r['resumen']['interes_gracia'];
+                $datos['capital_financiado'] = $r['resumen']['capital_financiado'];
+            }
+            DB::table('compra')->where('compra_id', $compra->compra_id)->update($datos);
+        }
+
+        return $cambios;
     }
 
     // ------------------------------------------------------------------ listado de pago

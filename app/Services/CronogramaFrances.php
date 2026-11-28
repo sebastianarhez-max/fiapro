@@ -14,8 +14,8 @@ use InvalidArgumentException;
  * - Los períodos se numeran desde 1 (no hay período 0).
  * - El cliente puede pedir de 0 a 3 quincenas de gracia total (T) dentro del plazo:
  *   no paga y el interés se suma al saldo. Luego vienen N − g cuotas (S), N = meses × 2.
- * - Todas las cuotas son iguales. Los montos se redondean a 2 decimales y la diferencia
- *   de redondeo se absorbe en el interés de la última cuota, que deja el saldo en 0.00.
+ * - Todos los cálculos se hacen con 7 decimales (indicación del docente) y recién al mostrarlos
+ *   se redondean a 2 decimales. Así todas las cuotas son iguales y la última deja el saldo en 0.
  */
 class CronogramaFrances
 {
@@ -32,9 +32,9 @@ class CronogramaFrances
      * @param int             $meses   Plazo en meses (períodos = meses * 2)
      * @param CarbonInterface $compra  Fecha de la compra (inicio del período 1)
      * @param int             $gracia  Quincenas de gracia total elegidas por el cliente (0 a 3)
-     * @param int             $precision Decimales internos; por defecto conserva la liquidación de compras reales.
+     * @param int             $precision Decimales del cálculo (7 por defecto; los montos se muestran redondeados a 2).
      */
-    public function generar(float $capital, float $tea, int $meses, CarbonInterface $compra, int $gracia = 0, int $precision = self::PRECISION_MONETARIA): array
+    public function generar(float $capital, float $tea, int $meses, CarbonInterface $compra, int $gracia = 0, int $precision = self::PRECISION_SIMULADOR): array
     {
         if ($precision < self::PRECISION_MONETARIA || $precision > self::PRECISION_SIMULADOR) {
             throw new InvalidArgumentException('La precisión debe estar entre 2 y 7 decimales.');
@@ -62,7 +62,7 @@ class CronogramaFrances
             throw new InvalidArgumentException("Con {$meses} " . ($meses === 1 ? 'mes' : 'meses') . " ({$total} quincenas) la gracia puede ser como máximo de " . ($total - 1) . ' ' . ($total - 1 === 1 ? 'quincena' : 'quincenas') . '. Debe quedar al menos una cuota.');
         }
 
-        $teq = self::teq($tea, $precision === self::PRECISION_MONETARIA ? null : $precision);
+        $teq = self::teq($tea);                               // TEQ sin redondear (se muestra con 7 decimales en %)
         $n = $total - $gracia;                                // cuotas con pago
         $filas = [];
         $saldo = round($capital, $precision);
@@ -115,9 +115,8 @@ class CronogramaFrances
                 $interes = round($saldo * $teq, $precision);
                 $amort = round($cuota - $interes, $precision);
             } elseif ($teq > 0.0) {
-                // Última cuota: todas las cuotas son iguales (indicación del docente).
-                // Se amortiza todo el saldo pendiente y el interés de este período absorbe
-                // la diferencia de redondeo acumulada (algunos céntimos).
+                // Última cuota: se amortiza todo el saldo pendiente y la cuota es la misma que las
+                // anteriores (con 7 decimales la diferencia de redondeo es de una diezmillonésima).
                 $amort = $saldo;
                 $interes = round($cuota - $saldo, $precision);
             } else {

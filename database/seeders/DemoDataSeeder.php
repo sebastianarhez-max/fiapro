@@ -30,6 +30,9 @@ class DemoDataSeeder extends Seeder
             }
         });
 
+        // Las cuotas pendientes de la demo se calculan con el cronograma vigente (7 decimales)
+        app(\App\Services\CuentaCorriente::class)->recalcularCuotasPendientes();
+
         if (DB::getDriverName() === 'pgsql') {
             DB::statement("SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE((SELECT MAX(id) FROM users), 1))");
         }
